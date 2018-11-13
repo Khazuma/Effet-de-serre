@@ -1,0 +1,66 @@
+# 1/ Importation des modules Numpy et Scipy :
+
+from numpy import *
+from scipy.optimize import fsolve
+
+# 2/ Constantes :
+
+sigma = 5.670367e-8    # constante de Stefan-Boltzmann (en W * m^-2 * K^-4)
+
+# 3/ Variables d'entrée (inputs) :
+
+Fd = float(input("Fd := "))    # flux direct (en W * m^-2) => Valeur test : 700
+Fi = float(input("Fi := "))    # flux indirect (en W * m^-2) => Valeur test : 300
+T = float(input("T := "))      # température maximale à l'intérieur de la serre (en K) => Valeur (cf. cahier des charges) : 65 + 273.15 = 338.15
+h = float(input("h := "))      # coefficient de convection thermique (en W * m^-2 * K^-1) => Valeur test : 4
+
+# 4/ Définition du système d'équations algébriques non-linéaires :
+
+def system(z):   # Numpy ne peut prendre qu'un seul paramètre ! => plus ou moins équivalent à une liste ou un tuple
+
+    # 4a/ Composantes du paramètre de la fonction :
+
+    P = z[0]
+    Fp = z[1]
+    Fs = z[2]
+    Tp = z[3]
+    Ts = z[4]   # z est équivalent à une liste de composantes : [P, Fp, Fs, Tp, Ts]
+
+    # 4b/ Initialisation du système :
+
+    F = empty((5))  # 5 pour 5 inconnues
+
+    # 4c/ Système d'équations :
+
+    F[0] = h * (Tp - T) + h * (Ts - T) - P      # équivalent à : h * (Tp - T) + h * (Ts - T) - P = 0
+    F[1] = sigma * pow(Tp,4) - Fp               # (tous les termes du même côté du signe égal)
+    F[2] = sigma * pow(Ts,4) - Fs
+    F[3] = P + Fp - Fd - Fi
+    F[4] = Fs + h * (Ts - T) - Fd - Fp
+
+    # 4d/ Variables de sortie :
+
+    return F
+
+# L'élément sortant de la fonction, F, sera une liste de composantes : [P, Fp, Fs, Tp, Ts]
+# P := puissance captée par la serre (en W * m^-2)
+# Fp := rayonnement plaque supérieure (en W * m^-2)
+# Fs := rayonnement plaque inférieure (en W * m^-2)
+# Tp := température plaque supérieure (en K)
+# Ts := température plaque inférieure (en K)
+
+# 5/ Valeurs de départ des inconnues :
+
+zGuess = array([1,1,1,1,1])     # Mettre [1,1,1,1,1] ou [0,0,0,0,1] ne change rien aux solutions !
+
+# 6/ Résolution du système :
+
+z = fsolve(system,zGuess)   # Les solutions sont assignées sous forme de liste (de 5 composantes) à z
+
+# 7/ Impression du résultat (liste contenant les valeurs de P, Fp, Fs, Tp, Ts) :
+
+print(z)
+
+
+# Documentation : https://www.youtube.com/watch?v=S4Qg2CsiIj8
+# (vidéo expliquant l'utilisation de Numpy pour résoudre un système d'équations non-linéaires)
