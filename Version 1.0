@@ -1,66 +1,106 @@
-# 1/ Importation des modules Numpy et Scipy :
-
-from numpy import *
+from numpy import array, empty
 from scipy.optimize import fsolve
+from math import log
+from termcolor import colored
 
-# 2/ Constantes :
 
-sigma = 5.670367e-8    # constante de Stefan-Boltzmann (en W * m^-2 * K^-4)
+def environnement(E, L, T_amb, P_sat_T_dp, P_sat_T_amb):
 
-# 3/ Variables d'entrée (inputs) :
+    T_dp = 1 / ((1 / T_amb) - (R / (L * M_eau)) * log(P_sat_T_dp / P_sat_T_amb))
+    T_sky = T_amb * (0.711 + 0.0056 * T_dp + 7.3e-5 * pow(T_dp, 2)) ** (1/4)
+    Fi = sigma * pow(T_sky, 4)
+    Fd = E - Fi
 
-Fd = float(input("Fd := "))    # flux direct (en W * m^-2) => Valeur test : 700
-Fi = float(input("Fi := "))    # flux indirect (en W * m^-2) => Valeur test : 300
-T = float(input("T := "))      # température maximale à l'intérieur de la serre (en K) => Valeur (cf. cahier des charges) : 65 + 273.15 = 338.15
-h = float(input("h := "))      # coefficient de convection thermique (en W * m^-2 * K^-1) => Valeur test : 4
+    return T_dp, T_sky, Fi, Fd
 
-# 4/ Définition du système d'équations algébriques non-linéaires :
 
-def system(z):   # Numpy ne peut prendre qu'un seul paramètre ! => plus ou moins équivalent à une liste ou un tuple
-
-    # 4a/ Composantes du paramètre de la fonction :
+def system_effet_de_serre(z):
 
     P = z[0]
     Fp = z[1]
     Fs = z[2]
     Tp = z[3]
-    Ts = z[4]   # z est équivalent à une liste de composantes : [P, Fp, Fs, Tp, Ts]
+    Ts = z[4]
 
-    # 4b/ Initialisation du système :
+    F = empty(5)
 
-    F = empty((5))  # 5 pour 5 inconnues
-
-    # 4c/ Système d'équations :
-
-    F[0] = h * (Tp - T) + h * (Ts - T) - P      # équivalent à : h * (Tp - T) + h * (Ts - T) - P = 0
-    F[1] = sigma * pow(Tp,4) - Fp               # (tous les termes du même côté du signe égal)
-    F[2] = sigma * pow(Ts,4) - Fs
+    F[0] = h * (Tp - T_air) + h * (Ts - T_air) - P
+    F[1] = sigma * pow(Tp, 4) - Fp
+    F[2] = sigma * pow(Ts, 4) - Fs
     F[3] = P + Fp - Fd - Fi
-    F[4] = Fs + h * (Ts - T) - Fd - Fp
-
-    # 4d/ Variables de sortie :
+    F[4] = Fs + h * (Ts - T_air) - Fd - Fp
 
     return F
 
-# L'élément sortant de la fonction, F, sera une liste de composantes : [P, Fp, Fs, Tp, Ts]
-# P := puissance captée par la serre (en W * m^-2)
-# Fp := rayonnement plaque supérieure (en W * m^-2)
-# Fs := rayonnement plaque inférieure (en W * m^-2)
-# Tp := température plaque supérieure (en K)
-# Ts := température plaque inférieure (en K)
 
-# 5/ Valeurs de départ des inconnues :
+def effet_de_serre():
 
-zGuess = array([1,1,1,1,1])     # Mettre [1,1,1,1,1] ou [0,0,0,0,1] ne change rien aux solutions !
+    Init = array([1,1,1,1,1])
+    z = fsolve(system_effet_de_serre, Init)
 
-# 6/ Résolution du système :
-
-z = fsolve(system,zGuess)   # Les solutions sont assignées sous forme de liste (de 5 composantes) à z
-
-# 7/ Impression du résultat (liste contenant les valeurs de P, Fp, Fs, Tp, Ts) :
-
-print(z)
+    return z[0], z[1], z[2], z[3], z[4]
 
 
-# Documentation : https://www.youtube.com/watch?v=S4Qg2CsiIj8
-# (vidéo expliquant l'utilisation de Numpy pour résoudre un système d'équations non-linéaires)
+def ventilation(m_produit, t, X_0, X_f, X_max, X_amb, P_sat_T_max, P_sat_T_amb, P_atm):
+
+    P_vap_max = X_max * P_sat_T_max
+    Y_max = (M_eau / M_air) * (P_vap_max / (P_atm - P_vap_max))
+    P_vap_amb = X_amb * P_sat_T_amb
+    Y_amb = (M_eau / M_air) * (P_vap_amb / (P_atm - P_vap_amb))
+
+    m_seche = m_produit / (1 + X_0)
+    delta_masse_eau = (X_0 - X_f) * m_seche
+    J = delta_masse_eau / t
+    Q = J / (Y_max - Y_amb)
+
+    return Q
+
+
+# Constantes
+sigma = 5.670367e-8  # W.m^-2.K^-4
+M_eau = 18.01528e-3  # kg_air.mol^-1
+M_air = 28.965338e-3  # kg_air.mol^-1
+R = 8.3144621  # J.mol^-1.K^-1
+
+
+# Inputs
+
+E = float(input("Énergie solaire totale (en W/m\xb2) := "))
+L = float(input("Chaleur latente de vaporisation de l'eau - fonction de la température (en J/kg) := "))
+T_amb = float(input("Température de l'air ambiant (en K) := "))
+P_sat_T_dp = float(input("Pression de vapeur saturante en fonction de la température de rosée (en Pa) := "))
+P_sat_T_amb = float(input("Pression de vapeur saturante de l'air ambiant - fonction de la température de l'air ambiant (en Pa) := "))
+
+Fd = float(input("Flux solaire direct (en W/m\xb2) := "))
+Fi = float(input("Flux solaire indirect (en W/m\xb2) := "))
+T_air = float(input("Température maximale de l'air traversant le séchoir (en K) := "))
+h = float(input("Coefficient de convection thermique (en W/(m\xb2.K)) := "))
+
+m_produit = float(input("Masse du produit à sécher (en kg_produit) := "))
+t = float(input("Durée de séchage (en heures) := "))
+X_0 = float(input("Teneur initiale en eau (en kg_eau/kg_matière_sèche) := "))
+X_f = float(input("Teneur finale en eau (en kg_eau/kg_matière_sèche) := "))
+X_max = float(input("Humidité relative maximale dans le séchoir (en %) := "))
+X_amb = float(input("Humidité relative de l'air ambiant (en %) := "))
+P_sat_T_max = float(input("Pression de vapeur saturante maximale - fonction de la température ambiante (en Pa) := "))
+P_atm = float(input("Pression atmosphérique (en Pa) := "))
+
+
+# Outputs
+
+T_dp = environnement(E, L, T_amb, P_sat_T_dp, P_sat_T_amb)[0]
+T_sky = environnement(E, L, T_amb, P_sat_T_dp, P_sat_T_amb)[1]
+#Fi = environnement(E, L, T_amb, P_sat_T_dp, P_sat_T_amb)[2]
+#Fd = environnement(E, L, T_amb, P_sat_T_dp, P_sat_T_amb)[3]
+
+P = effet_de_serre()[0]
+Fp = effet_de_serre()[1]
+Fs = effet_de_serre()[2]
+Tp = effet_de_serre()[3]
+Ts = effet_de_serre()[4]
+
+Q = ventilation(m_produit, t, X_0, X_f, X_max, X_amb, P_sat_T_max, P_sat_T_amb, P_atm)
+
+
+print("Puissance captée par la serre =", colored(P, color='red'), "W/m\xb2")
+print("Débit d'air =", colored(Q, color='blue'), "m\xb3/h")
